@@ -52,6 +52,53 @@ def main():
     print(reason)
 
     counts = collections.Counter()
+    candidate_counts = collections.Counter()
+    # Every OSM candidate receives independent spatial verification.
+    # Do not choose the first candidate for addresses with duplicate OSM records.
+    candidate_path = out / "osm_kandidater.csv"
+    candidate_by_address = collections.defaultdict(list)
+    if candidate_path.exists():
+        with candidate_path.open(encoding="utf-8-sig", newline="") as cf:
+            for c in csv.DictReader(cf):
+                candidate_by_address[c["sokadress"]].append(c)
+    audit_path = out / "osm_kandidater_geografi.csv"
+    queue_path = out / "granskningsko.csv"
+    candidate_fields = ["sokadress", "osm_id", "latitude_epsg4326", "longitude_epsg4326", "osm_city", "osm_postcode", "inom_lulea_kommun_osm", "geografisk_bedomning"]
+    review_fields = ["sokadress", "ursprunglig_status", "granskningsorsak", "antal_kandidater", "antal_inom", "antal_utanfor", "osm_id", "latitude_epsg4326", "longitude_epsg4326", "osm_city", "osm_postcode"]
+    with audit_path.open("w", encoding="utf-8-sig", newline="") as ac, queue_path.open("w", encoding="utf-8-sig", newline="") as qf:
+        candidate_writer = csv.DictWriter(ac, fieldnames=candidate_fields)
+        review_writer = csv.DictWriter(qf, fieldnames=review_fields)
+        candidate_writer.writeheader()
+        review_writer.writeheader()
+        for address, candidates in candidate_by_address.items():
+            spatial_counts = collections.Counter()
+            for candidate in candidates:
+                lat = candidate.get("latitude_epsg4326", "")
+                lon = candidate.get("longitude_epsg4326", "")
+                if polygon is None:
+                    verdict, inside = "Kommungrans saknas - ej verifierad", ""
+                else:
+                    try:
+                        inside_bool = polygon.covers(Point(float(lon), float(lat)))
+                        verdict, inside = ("Inom kommungrans", "ja") if inside_bool else ("Utanfor kommungrans", "nej")
+                    except (TypeError, ValueError):
+                        verdict, inside = "Ogiltig koordinat", ""
+                spatial_counts[verdict] += 1
+                candidate_counts[verdict] += 1
+                candidate_writer.writerow({
+                    **candidate, "inom_lulea_kommun_osm": inside,
+                    "geografisk_bedomning": verdict
+                })
+            if len(candidates) > 1 or spatial_counts.get("Utanfor kommungrans", 0):
+                reason = "Flera OSM-kandidater" if len(candidates) > 1 else "Kandidat utanfor kommungrans"
+                for candidate in candidates:
+                    review_writer.writerow({
+                        "sokadress": address, "ursprunglig_status": "Flera OSM-kandidater" if len(candidates)>1 else "En kandidat",
+                        "granskningsorsak": reason, "antal_kandidater": len(candidates),
+                        "antal_inom": spatial_counts.get("Inom kommungrans", 0),
+                        "antal_utanfor": spatial_counts.get("Utanfor kommungrans", 0),
+                        **candidate
+                    })
     inp = Path(args.input)
     with inp.open(encoding="utf-8-sig", newline="") as f, (out / "osm_matchning_geografi.csv").open("w", encoding="utf-8-sig", newline="") as g:
         reader = csv.DictReader(f)
@@ -85,6 +132,8 @@ def main():
         "expected_municipality": "Luleå kommun (2580)", "geometry_crs": "EPSG:4326",
         "boundary_status": reason, "number_of_matching_polygons": len(boundary.shapes),
         "spatial_status": dict(counts),
+        "candidate_level_spatial_status": dict(candidate_counts),
+        "note": "granskningsko.csv includes all candidates for ambiguous addresses and points outside the boundary.",
         "caveat": "Municipal spatial position is not proof of correct street/house number or Nominatim geocoding. Multiple candidates have no chosen coordinate."
     }
     (out / "geografisk_sammanfattning.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
