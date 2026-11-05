@@ -12,10 +12,14 @@ def norm(s):
     s=unicodedata.normalize("NFKC",str(s or "")).casefold()
     return re.sub(r"\s+"," ",s).strip().replace("‐","-").replace("–","-")
 
+def house_norm(s):
+    h=norm(s)
+    return re.sub(r"^(\\d+)\\s+([a-zåäö])$",r"\\1\\2",h)
+
 def parse(s):
     s=re.sub(r"\s+(?:lgh\s*\d{4}|\d+\s*tr|bv|vån\s*\d+)\s*$","",str(s or ""),flags=re.I).strip()
     m=re.match(r"^(.+?)\s+(\d+[a-zåäö]?)$",s,re.I)
-    return (norm(m.group(1)),norm(m.group(2))) if m else None
+    return (norm(m.group(1)),house_norm(m.group(2))) if m else None
 
 def inputs(path):
     wb=load_workbook(path,read_only=True,data_only=True)
@@ -49,7 +53,7 @@ class AddressHandler(osmium.SimpleHandler):
             if not (LAT_MIN<=p.lat<=LAT_MAX and LON_MIN<=p.lon<=LON_MAX):return
         except (RuntimeError,ValueError,ZeroDivisionError):return
         for h in re.split(r"\s*;\s*",house):
-            key=(norm(street),norm(h))
+            key=(norm(street),house_norm(h))
             if key not in self.keys: continue
             city=str(o.tags.get("addr:city",""))
             postcode=str(o.tags.get("addr:postcode",""))
