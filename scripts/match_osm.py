@@ -38,7 +38,7 @@ class AddressHandler(osmium.SimpleHandler):
         street=o.tags.get("addr:street"); house=o.tags.get("addr:housenumber")
         if not street or not house: return
         try:
-            if o.type=="n":
+            if geom=="node":
                 p=o.location
             else:
                 pts=[n.location for n in o.nodes if n.location.valid()]
@@ -53,7 +53,7 @@ class AddressHandler(osmium.SimpleHandler):
             if key not in self.keys: continue
             city=str(o.tags.get("addr:city",""))
             postcode=str(o.tags.get("addr:postcode",""))
-            self.matches[key].append(dict(osm_id=o.type+str(o.id),lat=round(p.lat,7),lon=round(p.lon,7),city=city,postcode=postcode))
+            self.matches[key].append(dict(osm_id=("n" if geom=="node" else "w")+str(o.id),lat=round(p.lat,7),lon=round(p.lon,7),city=city,postcode=postcode))
     def node(self,o):self.check(o,"node")
     def way(self,o):self.check(o,"way")
 
