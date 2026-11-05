@@ -5,6 +5,7 @@ on:
     paths:
       - 'data/lulea_adresser_kvalitetsgranskning.xlsx'
       - 'scripts/match_osm.py'
+      - 'scripts/verify_geo.py'
       - '.github/workflows/osm-addresses.yml'
 jobs:
   match:
@@ -16,7 +17,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Installera beroenden
-        run: pip install osmium openpyxl
+        run: pip install osmium openpyxl shapely
       - name: Kontrollera indata
         run: test -s data/lulea_adresser_kvalitetsgranskning.xlsx
       - name: Hämta OSM Sverige
@@ -26,6 +27,8 @@ jobs:
           test -s osm/sweden.osm.pbf
       - name: Matcha adresser
         run: python scripts/match_osm.py --input data/lulea_adresser_kvalitetsgranskning.xlsx --pbf osm/sweden.osm.pbf --out resultat
+      - name: Kontrollera kandidatkoordinater mot Luleå kommungräns
+        run: python scripts/verify_geo.py --input resultat/osm_matchning.csv --pbf osm/sweden.osm.pbf --out resultat
       - uses: actions/upload-artifact@v4
         if: always()
         with:
