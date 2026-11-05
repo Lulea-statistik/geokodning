@@ -1,0 +1,34 @@
+name: Kontrollera Luleåadresser i OSM
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'data/lulea_adresser_kvalitetsgranskning.xlsx'
+      - 'scripts/match_osm.py'
+      - '.github/workflows/osm-addresses.yml'
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Installera beroenden
+        run: pip install osmium openpyxl
+      - name: Kontrollera indata
+        run: test -s data/lulea_adresser_kvalitetsgranskning.xlsx
+      - name: Hämta OSM Sverige
+        run: |
+          mkdir -p osm
+          curl --fail --location --retry 3 -o osm/sweden.osm.pbf https://download.geofabrik.de/europe/sweden-latest.osm.pbf
+          test -s osm/sweden.osm.pbf
+      - name: Matcha adresser
+        run: python scripts/match_osm.py --input data/lulea_adresser_kvalitetsgranskning.xlsx --pbf osm/sweden.osm.pbf --out resultat
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lulea-osm-adressmatchning
+          path: resultat/
+          if-no-files-found: warn
