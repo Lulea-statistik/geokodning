@@ -1,0 +1,39 @@
+name: Granska geokodningskvalitet och dubbletter
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/review_osm.py'
+      - '.github/workflows/review-osm.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Installera beroenden
+        run: pip install openpyxl
+      - name: Hamta verifierad geokodningsmaster fran korning 12
+        run: |
+          mkdir -p resultat
+          gh run download 42220198281 --repo "${{ github.repository }}" --name lulea-osm-adressmatchning --dir resultat
+          test -s resultat/osm_samlat_per_adress.csv
+      - name: Granska dubbletter, kvalitetsrisk och kallfilens kolumner
+        run: python scripts/review_osm.py --resultat resultat --workbook data/lulea_adresser_kvalitetsgranskning.xlsx
+      - name: Publicera rapport
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: osm-granskningsrapport
+          path: |
+            resultat/osm_granskningsrapport.json
+            resultat/osm_granskningsprioritet.csv
+            resultat/osm_dubblettkontroll.csv
