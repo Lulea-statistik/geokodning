@@ -1,6 +1,9 @@
 name: Pilot - Nominatim med och utan ort
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nominatim-pilot.yml'
 jobs:
   compare:
     runs-on: ubuntu-latest
