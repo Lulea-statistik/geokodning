@@ -1,0 +1,36 @@
+name: Komplettera adresser utan geokodning
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/resolve_unmatched.py'
+      - '.github/workflows/resolve-unmatched.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hamta verifierat underlag fran korning 12
+        run: |
+          mkdir -p resultat
+          gh run download 42220198281 --repo "${{ github.repository }}" --name lulea-osm-adressmatchning --dir resultat
+          test -s resultat/osm_samlat_per_adress.csv
+          test -s resultat/osm_kandidater_geografi.csv
+      - name: Komplettera med samlokaliserade OSM-kandidater
+        run: python3 scripts/resolve_unmatched.py --out resultat
+      - name: Publicera ny master och aterstaende adresser
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: osm-kompletterad-geokodning
+          path: |
+            resultat/osm_samlat_per_adress_kompletterat.csv
+            resultat/osm_saknar_position_efter_komplettering.csv
+            resultat/osm_samlokaliserade_kandidater.csv
+            resultat/osm_komplettering_sammanfattning.json
