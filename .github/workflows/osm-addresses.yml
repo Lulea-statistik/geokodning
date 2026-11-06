@@ -8,6 +8,7 @@ on:
       - 'scripts/verify_geo.py'
       - 'scripts/osm_fallback.py'
       - 'scripts/osm_road_fallback.py'
+      - 'scripts/consolidate_osm.py'
       - '.github/workflows/osm-addresses.yml'
 jobs:
   match:
@@ -35,6 +36,8 @@ jobs:
         run: python scripts/osm_fallback.py --input resultat/osm_matchning.csv --pbf osm/sweden.osm.pbf --out resultat
       - name: Uppskatta gatulage fran namngivna OSM-vagar
         run: python scripts/osm_road_fallback.py --input resultat/osm_reservgeokodning.csv --pbf osm/sweden.osm.pbf --out resultat
+      - name: Sammanstall per unik adress med kvalitetsklassning
+        run: python scripts/consolidate_osm.py --out resultat
       - uses: actions/upload-artifact@v4
         if: always()
         with:
