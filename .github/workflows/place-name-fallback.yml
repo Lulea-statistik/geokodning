@@ -1,0 +1,45 @@
+name: Sok OSM-platsnamn utan husnummer
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/place_name_fallback.py'
+      - '.github/workflows/place-name-fallback.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Installera beroenden
+        run: pip install osmium shapely openpyxl
+      - name: Hamta master med 268 tidigare omatchade adresser
+        run: |
+          mkdir -p resultat
+          gh run download 42225702833 --repo "${{ github.repository }}" --name osm-kompletterad-geokodning --dir resultat
+          test -s resultat/osm_samlat_per_adress_kompletterat.csv
+      - name: Hamta OSM Sverige
+        run: |
+          mkdir -p osm
+          curl --fail --location --retry 3 -o osm/sweden.osm.pbf https://download.geofabrik.de/europe/sweden-latest.osm.pbf
+          test -s osm/sweden.osm.pbf
+      - name: Sok namngivna platser efter borttaget husnummer
+        run: python scripts/place_name_fallback.py --input resultat/osm_samlat_per_adress_kompletterat.csv --pbf osm/sweden.osm.pbf --out resultat
+      - name: Publicera kompletterade resultat
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: osm-platsnamn-utan-husnummer
+          path: |
+            resultat/osm_master_efter_platsnamn.csv
+            resultat/osm_platsnamn_resultat.csv
+            resultat/osm_aterstar_utan_position.csv
+            resultat/osm_platsnamn_sammanfattning.json
