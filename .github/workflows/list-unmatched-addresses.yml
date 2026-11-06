@@ -1,0 +1,35 @@
+name: Lista fem omatchade adresser
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/list-unmatched-addresses.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hämta befintlig reservrapport från korning 10
+        run: |
+          mkdir -p resultat
+          gh run download 42202308101 --repo "${{ github.repository }}" --name lulea-osm-adressmatchning --dir resultat
+          test -s resultat/osm_reservgeokodning.csv
+      - name: Visa fem adresser ur gruppen utan OSM-gatuadress
+        run: |
+          python3 - <<'PY'
+          import csv
+          from collections import Counter
+          with open('resultat/osm_reservgeokodning.csv',encoding='utf-8-sig',newline='') as f:
+              rows=[r for r in csv.DictReader(f) if r['reservmetod']=='Ingen OSM-gatuadress inom kommunen']
+          addresses=sorted(set(r['sokadress'] for r in rows))
+          print('TOTAL_GRUPP:',len(addresses),flush=True)
+          print('TOPP_FEM_ALFABETISKT:',flush=True)
+          for i,addr in enumerate(addresses[:5],1):
+              print(f'{i}. {addr}',flush=True)
+          PY
