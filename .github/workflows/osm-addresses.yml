@@ -7,6 +7,7 @@ on:
       - 'scripts/match_osm.py'
       - 'scripts/verify_geo.py'
       - 'scripts/osm_fallback.py'
+      - 'scripts/osm_road_fallback.py'
       - '.github/workflows/osm-addresses.yml'
 jobs:
   match:
@@ -32,6 +33,8 @@ jobs:
         run: python scripts/verify_geo.py --input resultat/osm_matchning.csv --pbf osm/sweden.osm.pbf --out resultat
       - name: Uppskatta position for adresser utan OSM-traff
         run: python scripts/osm_fallback.py --input resultat/osm_matchning.csv --pbf osm/sweden.osm.pbf --out resultat
+      - name: Uppskatta gatulage fran namngivna OSM-vagar
+        run: python scripts/osm_road_fallback.py --input resultat/osm_reservgeokodning.csv --pbf osm/sweden.osm.pbf --out resultat
       - uses: actions/upload-artifact@v4
         if: always()
         with:
