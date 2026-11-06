@@ -6,6 +6,7 @@ on:
       - 'data/lulea_adresser_kvalitetsgranskning.xlsx'
       - 'scripts/match_osm.py'
       - 'scripts/verify_geo.py'
+      - 'scripts/osm_fallback.py'
       - '.github/workflows/osm-addresses.yml'
 jobs:
   match:
@@ -29,6 +30,8 @@ jobs:
         run: python scripts/match_osm.py --input data/lulea_adresser_kvalitetsgranskning.xlsx --pbf osm/sweden.osm.pbf --out resultat
       - name: Kontrollera kandidatkoordinater mot Luleå kommungräns
         run: python scripts/verify_geo.py --input resultat/osm_matchning.csv --pbf osm/sweden.osm.pbf --out resultat
+      - name: Uppskatta position for adresser utan OSM-traff
+        run: python scripts/osm_fallback.py --input resultat/osm_matchning.csv --pbf osm/sweden.osm.pbf --out resultat
       - uses: actions/upload-artifact@v4
         if: always()
         with:
