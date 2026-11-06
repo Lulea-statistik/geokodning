@@ -1,0 +1,32 @@
+name: Klassificera Nominatim-adresskvalitet
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nominatim-quality.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hämta geografiskt kontrollerade pilotresultat
+        run: |
+          mkdir -p resultat
+          gh run download 42195773921 --repo "${{ github.repository }}" --name nominatim-geografisk-jamforelse --dir resultat
+          test -s resultat/nominatim_pilot_geografi.csv
+      - name: Klassificera Nominatim-träffar
+        run: |
+          python3 scripts/classify_nominatim.py --input resultat/nominatim_pilot_geografi.csv --out resultat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nominatim-kvalitetsklassning
+          path: |
+            resultat/nominatim_kvalitetsklassning.csv
+            resultat/nominatim_kvalitetsjamforelse.csv
+            resultat/nominatim_kvalitetsrapport.json
