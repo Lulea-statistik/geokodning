@@ -1,0 +1,28 @@
+name: Pilot - Nominatim med och utan ort
+on:
+  workflow_dispatch:
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install openpyxl
+      - name: Kontrollera indata
+        run: test -s data/lulea_adresser_kvalitetsgranskning.xlsx
+      - name: Testa tolv par av sokningar
+        run: |
+          python scripts/nominatim_pilot.py \
+            --input data/lulea_adresser_kvalitetsgranskning.xlsx \
+            --out resultat \
+            --limit 12 \
+            --user-agent 'LuleaStatisticsAddressPilot/1.0 (contact: https://github.com/Lulea-statistik/geokodning/issues)'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nominatim-adresspilot
+          path: resultat/nominatim_pilot*
+          if-no-files-found: warn
