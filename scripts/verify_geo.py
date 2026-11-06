@@ -53,6 +53,7 @@ def main():
 
     counts = collections.Counter()
     candidate_counts = collections.Counter()
+    review_address_counts = collections.Counter()
     # Every OSM candidate receives independent spatial verification.
     # Do not choose the first candidate for addresses with duplicate OSM records.
     candidate_path = out / "osm_kandidater.csv"
@@ -90,11 +91,16 @@ def main():
                     "geografisk_bedomning": verdict
                 })
             if len(candidates) > 1 or spatial_counts.get("Utanfor kommungrans", 0):
-                reason = "Flera OSM-kandidater" if len(candidates) > 1 else "Kandidat utanfor kommungrans"
+                review_address_counts["unika_adresser_i_granskningsko"] += 1
+                if len(candidates) > 1:
+                    review_address_counts["adresser_med_flera_kandidater"] += 1
+                if spatial_counts.get("Utanfor kommungrans", 0):
+                    review_address_counts["adresser_med_kandidat_utanfor"] += 1
+                review_reason = "Flera OSM-kandidater" if len(candidates) > 1 else "Kandidat utanfor kommungrans"
                 for candidate in candidates:
                     review_writer.writerow({
                         "sokadress": address, "ursprunglig_status": "Flera OSM-kandidater" if len(candidates)>1 else "En kandidat",
-                        "granskningsorsak": reason, "antal_kandidater": len(candidates),
+                        "granskningsorsak": review_reason, "antal_kandidater": len(candidates),
                         "antal_inom": spatial_counts.get("Inom kommungrans", 0),
                         "antal_utanfor": spatial_counts.get("Utanfor kommungrans", 0),
                         **candidate
@@ -133,6 +139,7 @@ def main():
         "boundary_status": reason, "number_of_matching_polygons": len(boundary.shapes),
         "spatial_status": dict(counts),
         "candidate_level_spatial_status": dict(candidate_counts),
+        "review_address_counts": dict(review_address_counts),
         "note": "granskningsko.csv includes all candidates for ambiguous addresses and points outside the boundary.",
         "caveat": "Municipal spatial position is not proof of correct street/house number or Nominatim geocoding. Multiple candidates have no chosen coordinate."
     }
