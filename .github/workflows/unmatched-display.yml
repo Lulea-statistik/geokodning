@@ -1,0 +1,34 @@
+name: Visa ej geokodade adresser som samlad kartpunkt
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/unmatched_display_point.py'
+      - '.github/workflows/unmatched-display.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  display:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hamta adressmaster efter platsnamnsmatchning
+        run: |
+          mkdir -p resultat
+          gh run download 42231995531 --repo "${{ github.repository }}" --name osm-platsnamn-utan-husnummer --dir resultat
+          test -s resultat/osm_master_efter_platsnamn.csv
+      - name: Skapa kartografisk samlingspunkt utan att skapa falska geokoder
+        run: python3 scripts/unmatched_display_point.py --input resultat/osm_master_efter_platsnamn.csv --out resultat --display-lon 22.149656 --display-lat 65.570072
+      - name: Publicera kart- och rapportfiler
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: osm-ej-geokodade-visningspunkt
+          path: |
+            resultat/osm_master_med_visningspunkt.csv
+            resultat/osm_ogekodade_visningssymbol.geojson
+            resultat/osm_visningspunkt_sammanfattning.json
