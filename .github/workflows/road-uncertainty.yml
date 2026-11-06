@@ -1,0 +1,35 @@
+name: Granska osakerhet for langa vagpositioner
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/road_uncertainty.py'
+      - '.github/workflows/road-uncertainty.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hamta verifierad adressmaster och vagreserv fran korning 12
+        run: |
+          mkdir -p resultat
+          gh run download 42220198281 --repo "${{ github.repository }}" --name lulea-osm-adressmatchning --dir resultat
+          test -s resultat/osm_samlat_per_adress.csv
+          test -s resultat/osm_vagreserv.csv
+      - name: Granska osakerhet och ranka langa vagar
+        run: python3 scripts/road_uncertainty.py --out resultat
+      - name: Publicera granskningsfiler
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: osm-lagesosakerhet
+          path: |
+            resultat/osm_lagesosakerhet.csv
+            resultat/osm_langa_vagar_granskning.csv
+            resultat/osm_lagesosakerhet_rapport.json
