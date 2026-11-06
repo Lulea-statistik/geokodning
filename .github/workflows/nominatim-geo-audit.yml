@@ -1,0 +1,45 @@
+name: Granska Nominatim-pilot geografiskt
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/nominatim-geo-audit.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Installera beroenden
+        run: pip install osmium shapely
+      - name: Hämta sparade Nominatim-pilotresultat
+        run: |
+          mkdir -p resultat
+          gh run download 42195285404 --repo "${{ github.repository }}" --name nominatim-adresspilot --dir resultat
+          test -s resultat/nominatim_pilot.csv
+      - name: Hämta OpenStreetMap Sverige
+        run: |
+          mkdir -p osm
+          curl --fail --location --retry 3 -o osm/sweden.osm.pbf https://download.geofabrik.de/europe/sweden-latest.osm.pbf
+          test -s osm/sweden.osm.pbf
+      - name: Verifiera Nominatim-punkter och jämför metodvarianter
+        run: python scripts/audit_nominatim_geo.py --input resultat/nominatim_pilot.csv --pbf osm/sweden.osm.pbf --out resultat
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nominatim-geografisk-jamforelse
+          path: |
+            resultat/nominatim_pilot_geografi.csv
+            resultat/nominatim_parvis_jamforelse.csv
+            resultat/nominatim_geo_sammanfattning.json
+          if-no-files-found: warn
