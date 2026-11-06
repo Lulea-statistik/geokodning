@@ -2,7 +2,7 @@
 """Approximate Lulea geocoding fallback against OSM addr:street, NEVER an exact address match.
 
 OSM coordinates WGS84/EPSG:4326; municipal polygon from OSM admin_level=7.
-Only unmatched addresses get fallbacks. No arbitrary street-number substitution in
+Only unmatched addresses get fallbacks. Candidate house numbers 1..500 are allowed. No arbitrary street-number substitution in
 reference data. Street medoid is a rough location, not a building position.
 """
 import argparse, collections, csv, json, math, re
@@ -62,18 +62,22 @@ def estimate(key, candidates):
     if not candidates: return None
     street, house = key
     target = number(house)
+    # Candidate house numbers may be anywhere from 1 through 500.
+    # This is a proxy location; it does not replace the input house number.
     numeric = [(abs(number(c["house"])-target), c) for c in candidates
-               if target is not None and number(c["house"]) is not None]
-    nearby = [(d,c) for d,c in numeric if d <= 10]
-    if nearby:
-        best_distance = min(d for d,_ in nearby)
-        best = [c for d,c in nearby if d == best_distance]
-        # A same street name may cover distinct villages: do not silently pick.
+               if target is not None and number(c["house"]) is not None
+               and 1 <= number(c["house"]) <= 500]
+    if numeric:
+        best_distance = min(d for d,_ in numeric)
+        best = [c for d,c in numeric if d == best_distance]
+        # A repeated street name can belong to separate settlements.
+        # Reject geographically conflicting equal-best-number candidates.
         spread = max((haversine((best[0]["lat"],best[0]["lon"]),(c["lat"],c["lon"]))
                       for c in best),default=0)
         if spread <= 750:
-            c = sorted(best,key=lambda x:x["osm_id"])[0]
-            return ("Närliggande husnummer",c,best_distance,spread)
+            c = sorted(best,key=lambda x:(x["osm_id"], x["house"]))[0]
+            method = "Närliggande husnummer" if best_distance <= 10 else "Husnummer 1-500, stor avvikelse"
+            return (method,c,best_distance,round(spread))
     # Only use a street proxy when candidate street-address points cluster locally.
     # Using a medoid avoids averaging coordinates outside the actual street.
     if len(candidates) > 1:
@@ -105,7 +109,7 @@ def main():
     fields=["sokadress","ursprunglig_status","reservmetod","osakadress_husnummer",
       "matchat_osm_husnummer","husnummer_avvikelse","osm_id","latitude_epsg4326",
       "longitude_epsg4326","gatukandidater_antal","gatukluster_spridning_m",
-      "inom_lulea_kommun_osm","positionsprecision"]
+      "inom_lulea_kommun_osm","positionsprecision","husnummerintervall_1_500"]
     totals=collections.Counter()
     unique= {}
     for row in target_rows:
@@ -127,15 +131,17 @@ def main():
           "longitude_epsg4326":round(choice["lon"],7) if choice else "",
           "gatukandidater_antal":len(candidates),"gatukluster_spridning_m":spread,
           "inom_lulea_kommun_osm":"ja" if choice else "",
-          "positionsprecision":"ungefärlig; inte adresspunkt" if choice else "saknas"}
+          "positionsprecision":"ungefärlig; inte adresspunkt" if choice else "saknas",
+          "husnummerintervall_1_500":"ja" if choice and number(choice["house"]) is not None and 1 <= number(choice["house"]) <= 500 else "nej"}
     with (out/"osm_reservgeokodning.csv").open("w",encoding="utf-8-sig",newline="") as f:
         w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(unique.values())
     # Never imply that a nearby house has the same address as the reference.
     summary={"adresser_utan_direkt_traff_i_indata":len(target_rows),
       "unika_sokadresser_med_reservprov":len(unique),
       "reservutfall":dict(totals),
-      "med_ungefar_lage":sum(v for k,v in totals.items() if k in ("Närliggande husnummer","Ungefärlig gatuposition")),
+      "med_ungefar_lage":sum(v for k,v in totals.items() if k in ("Närliggande husnummer","Husnummer 1-500, stor avvikelse","Ungefärlig gatuposition")),
       "geografisk_avgransning":"OSM Luleå kommungräns admin_level=7",
+      "kandidathusnummer_min":1,"kandidathusnummer_max":500,
       "crs":"EPSG:4326",
       "reservation":"Approximate location only, not exact address geocoding. Some street names may occur in distinct localities; clustered candidate threshold reduces but does not eliminate false associations."}
     (out/"osm_reservsammanfattning.json").write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding="utf-8")
